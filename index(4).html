@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Snake Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0f0d;
+    --green: #1EB53A;
+    --white: #FFFFFF;
+    --blue: #0072C6;
+    --muted: #446655;
+    --text: #f0f0f0;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+
+  /* Flag stripe bar at top */
+  #flag-bar {
+    width: 400px;
+    height: 6px;
+    display: flex;
+    margin-bottom: 12px;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  #flag-bar div { flex: 1; }
+  #flag-bar .g { background: var(--green); }
+  #flag-bar .w { background: var(--white); }
+  #flag-bar .b { background: var(--blue); }
+
+  h1 { font-size: 24px; font-weight: 700; letter-spacing: 4px; margin-bottom: 10px;
+    background: linear-gradient(90deg, var(--green), var(--white), var(--blue));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+  #header { display: flex; justify-content: space-between; width: 400px; margin-bottom: 10px; }
+  .label { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; }
+  .value { font-size: 22px; font-weight: 700; color: var(--green); }
+
+  #canvas-container { position: relative; }
+  canvas { display: block; border: 2px solid #1a2a1e; border-radius: 4px; }
+
+  #overlay {
+    position: absolute; inset: 0;
+    background: rgba(10,15,13,0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; border-radius: 4px;
+  }
+  #overlay h2 { font-size: 26px; font-weight: 700; letter-spacing: 3px;
+    background: linear-gradient(90deg, var(--green), var(--white), var(--blue));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  #overlay p { font-size: 12px; color: var(--muted); }
+  #overlay .result { font-size: 14px; color: var(--white); }
+
+  /* Flag-striped button */
+  #start-btn {
+    position: relative; border: none; padding: 11px 32px;
+    font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700;
+    cursor: pointer; border-radius: 3px; color: #0a0f0d;
+    background: linear-gradient(90deg, var(--green) 33%, var(--white) 33%, var(--white) 66%, var(--blue) 66%);
+    transition: opacity 0.15s;
+  }
+  #start-btn:hover { opacity: 0.88; }
+
+  #controls { font-size: 11px; color: var(--muted); margin-top: 10px; }
+
+  #mobile-controls { display: none; flex-direction: column; align-items: center; gap: 4px; margin-top: 10px; }
+  .ctrl-row { display: flex; gap: 4px; }
+  .ctrl-btn {
+    width: 52px; height: 52px; background: #111d14;
+    border: 1px solid #1a2a1e; color: var(--white);
+    font-size: 20px; cursor: pointer; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ctrl-btn:active { background: #1a2a1e; }
+  @media (pointer: coarse) {
+    #mobile-controls { display: flex; }
+    #controls { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="flag-bar"><div class="g"></div><div class="w"></div><div class="b"></div></div>
+<h1>SNAKE GAME</h1>
+
+<div id="header">
+  <div><div class="label">SCORE</div><div class="value" id="score-display">0</div></div>
+  <div style="text-align:right"><div class="label">BEST</div><div class="value" id="best-display">0</div></div>
+</div>
+
+<div id="canvas-container">
+  <canvas id="canvas" width="400" height="400"></canvas>
+  <div id="overlay">
+    <h2>🐍 SNAKE GAME</h2>
+    <p>Representing Sierra Leone 🇸🇱</p>
+    <p>eat the dot — don't hit the walls!</p>
+    <button id="start-btn">START GAME</button>
+  </div>
+</div>
+
+<div id="controls">Arrow keys or W A S D to move</div>
+<div id="mobile-controls">
+  <div class="ctrl-row"><button class="ctrl-btn" data-dir="UP">↑</button></div>
+  <div class="ctrl-row">
+    <button class="ctrl-btn" data-dir="LEFT">←</button>
+    <button class="ctrl-btn" data-dir="DOWN">↓</button>
+    <button class="ctrl-btn" data-dir="RIGHT">→</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const scoreDisplay = document.getElementById('score-display');
+const bestDisplay = document.getElementById('best-display');
+
+const COLS = 20, ROWS = 20, CELL = canvas.width / COLS;
+const GREEN = '#1EB53A', WHITE = '#FFFFFF', BLUE = '#0072C6';
+
+let snake, dir, nextDir, food, score, best = 0, gameLoop, running;
+
+function init() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0}; nextDir = {x:1,y:0};
+  score = 0; scoreDisplay.textContent = '0';
+  best = best || parseInt(localStorage.getItem('snake_sl_best')||'0');
+  bestDisplay.textContent = best;
+  spawnFood();
+}
+
+function spawnFood() {
+  let p;
+  do { p={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
+  while(snake.some(s=>s.x===p.x&&s.y===p.y));
+  food=p;
+}
+
+function step() {
+  dir = nextDir;
+  const head = {x:snake[0].x+dir.x, y:snake[0].y+dir.y};
+  if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS) return endGame();
+  if(snake.some(s=>s.x===head.x&&s.y===head.y)) return endGame();
+  snake.unshift(head);
+  if(head.x===food.x&&head.y===food.y){
+    score+=10; scoreDisplay.textContent=score;
+    if(score>best){best=score;bestDisplay.textContent=best;localStorage.setItem('snake_sl_best',best);}
+    spawnFood();
+  } else { snake.pop(); }
+}
+
+function lerpColor(c1, c2, t) {
+  const h = s => parseInt(s,16);
+  const r1=h(c1.slice(1,3)),g1=h(c1.slice(3,5)),b1=h(c1.slice(5,7));
+  const r2=h(c2.slice(1,3)),g2=h(c2.slice(3,5)),b2=h(c2.slice(5,7));
+  return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
+}
+
+function draw() {
+  // Dark green tinted background
+  ctx.fillStyle='#0a0f0d'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Subtle grid
+  ctx.fillStyle='#111d14';
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++)
+    ctx.fillRect(c*CELL+CELL/2-1, r*CELL+CELL/2-1, 2, 2);
+
+  // Food — white glowing dot (flag white)
+  const pulse = 1+0.15*Math.sin(Date.now()/300);
+  ctx.fillStyle=WHITE; ctx.shadowColor=WHITE; ctx.shadowBlur=14;
+  ctx.beginPath();
+  ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, (CELL/2-3)*pulse, 0, Math.PI*2);
+  ctx.fill(); ctx.shadowBlur=0;
+
+  // Snake — head green, body white→blue (Sierra Leone flag)
+  snake.forEach((seg,i)=>{
+    const isHead = i===0;
+    const t = i/Math.max(snake.length-1,1);
+    let color;
+    if(isHead){ color=GREEN; }
+    else if(t<0.5){ color=lerpColor(GREEN,WHITE,t/0.5); }
+    else { color=lerpColor(WHITE,BLUE,(t-0.5)/0.5); }
+
+    ctx.fillStyle=color;
+    if(isHead){ctx.shadowColor=GREEN; ctx.shadowBlur=10;}
+    const pad=isHead?1:2;
+    ctx.beginPath();
+    ctx.roundRect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2, isHead?4:3);
+    ctx.fill(); ctx.shadowBlur=0;
+  });
+}
+
+function endGame() {
+  running=false; clearInterval(gameLoop);
+  overlay.innerHTML=`
+    <h2 style="-webkit-text-fill-color:#ff4d4d;color:#ff4d4d">GAME OVER</h2>
+    <div class="result">Score: <strong style="color:${GREEN}">${score}</strong></div>
+    ${score>=best&&score>0?`<p style="color:${GREEN}">🏆 New Best! Sierra Leone 🇸🇱</p>`:''}
+    <button id="start-btn">PLAY AGAIN</button>`;
+  overlay.style.display='flex';
+  document.getElementById('start-btn').addEventListener('click', startGame);
+}
+
+function startGame() {
+  overlay.style.display='none'; init(); running=true;
+  clearInterval(gameLoop);
+  gameLoop=setInterval(()=>{ step(); },260);
+  (function loop(){ if(!running)return; draw(); requestAnimationFrame(loop); })();
+}
+
+document.addEventListener('keydown',e=>{
+  const map={ArrowUp:{x:0,y:-1},w:{x:0,y:-1},W:{x:0,y:-1},
+             ArrowDown:{x:0,y:1},s:{x:0,y:1},S:{x:0,y:1},
+             ArrowLeft:{x:-1,y:0},a:{x:-1,y:0},A:{x:-1,y:0},
+             ArrowRight:{x:1,y:0},d:{x:1,y:0},D:{x:1,y:0}};
+  const d=map[e.key]; if(!d)return; e.preventDefault();
+  if(d.x!==0&&d.x===-dir.x)return;
+  if(d.y!==0&&d.y===-dir.y)return;
+  nextDir=d;
+});
+
+document.querySelectorAll('.ctrl-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const map={UP:{x:0,y:-1},DOWN:{x:0,y:1},LEFT:{x:-1,y:0},RIGHT:{x:1,y:0}};
+    const d=map[btn.dataset.dir]; if(!d)return;
+    if(d.x!==0&&d.x===-dir.x)return;
+    if(d.y!==0&&d.y===-dir.y)return;
+    nextDir=d;
+  });
+});
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+best=parseInt(localStorage.getItem('snake_sl_best')||'0');
+bestDisplay.textContent=best;
+ctx.fillStyle='#0a0f0d'; ctx.fillRect(0,0,canvas.width,canvas.height);
+</script>
+</body>
+</html>
